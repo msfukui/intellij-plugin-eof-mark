@@ -36,6 +36,27 @@ IntelliJ Platform 向けプラグインです。エディタで開いたファ�
 ./gradlew runIde
 ```
 
+## リリース
+
+GitHub Actions の手動トリガーでセマンティックバージョニングに基づくリリースを行います。
+
+### 手順
+
+1. PR に `release:major`、`release:minor`、`release:patch` のいずれかのラベルを付与してマージ
+2. リリースしたいタイミングで GitHub Actions の "Run workflow" または `gh workflow run release` を実行
+3. 前回リリース以降のマージ済み PR のラベルから最も影響の大きいバンプレベルが自動決定される
+4. `gradle.properties` 更新 → ビルド → タグ作成 → GitHub Release 作成（zip 添付）
+
+### バージョンバンプの優先度
+
+| ラベル | バンプ |
+|--------|--------|
+| `release:major` | X.Y.Z → (X+1).0.0 |
+| `release:minor` | X.Y.Z → X.(Y+1).0 |
+| `release:patch` | X.Y.Z → X.Y.(Z+1) |
+
+複数 PR がある場合、最も影響の大きいラベルが採用されます。
+
 ## インストール
 
 現在は Marketplace 未公開です。ローカルビルドからインストールできます。
