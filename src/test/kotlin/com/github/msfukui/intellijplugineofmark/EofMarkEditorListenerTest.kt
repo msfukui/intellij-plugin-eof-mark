@@ -69,6 +69,22 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         assertEquals(newLength, inlays[0].offset)
     }
 
+    fun testCursorCannotMovePastEofMarker() {
+        myFixture.configureByText("test.txt", "Hello")
+        val editor = myFixture.editor
+        val textLength = editor.document.textLength
+
+        editor.caretModel.moveToOffset(textLength)
+        val visualColumnAtEnd = editor.caretModel.visualPosition.column
+
+        myFixture.performEditorAction("EditorRight")
+
+        assertEquals(
+            "Cursor visual position should not move past the end of document text",
+            visualColumnAtEnd, editor.caretModel.visualPosition.column
+        )
+    }
+
     fun testInlayRendererIsEofMarkRenderer() {
         myFixture.configureByText("test.txt", "Hello")
 
