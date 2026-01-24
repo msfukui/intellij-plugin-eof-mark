@@ -37,8 +37,68 @@ jobs:
 
       - name: Post coverage report
         if: github.event_name == 'pull_request'
-        uses: mi-kas/kover-report@v1
+        uses: actions/github-script@v7
         with:
-          path: build/reports/kover/report.xml
-          title: Coverage Report
-          update-comment: true
+          script: |
+            const fs = require('fs');
+            const xml = fs.readFileSync('build/reports/kover/report.xml', 'utf8');
+
+            const metrics = ['INSTRUCTION', 'BRANCH', 'LINE', 'METHOD', 'CLASS'];
+            const labels = {
+              INSTRUCTION: 'Instruction',
+              BRANCH: 'Branch',
+              LINE: 'Line',
+              METHOD: 'Method',
+              CLASS: 'Class'
+            };
+
+            // パッケージレベルの集計値（最後に出現するもの）を使用
+            const rows = [];
+            for (const metric of metrics) {
+              const regex = new RegExp(`<counter type="${metric}" missed="(\\d+)" covered="(\\d+)"/>`, 'g');
+              let match, lastMatch;
+              while ((match = regex.exec(xml)) !== null) {
+                lastMatch = match;
+              }
+              if (lastMatch) {
+                const missed = parseInt(lastMatch[1]);
+                const covered = parseInt(lastMatch[2]);
+                const total = missed + covered;
+                const pct = total > 0 ? ((covered / total) * 100).toFixed(1) : '0.0';
+                rows.push(`| ${labels[metric]} | ${covered} | ${missed} | ${total} | ${pct}% |`);
+              }
+            }
+
+            const body = [
+              '## Coverage Report',
+              '',
+              '| Metric | Covered | Missed | Total | Coverage |',
+              '|--------|---------|--------|-------|----------|',
+              ...rows,
+              '',
+              `_Generated from \`build/reports/kover/report.xml\`_`
+            ].join('\n');
+
+            // 既存コメントを検索して更新、なければ新規作成
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            const existing = comments.find(c => c.body.includes('## Coverage Report'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
