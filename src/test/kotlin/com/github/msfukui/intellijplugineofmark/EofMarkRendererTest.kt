@@ -10,7 +10,7 @@ class EofMarkRendererTest : BasePlatformTestCase() {
         val editor = myFixture.editor
         val renderer = EofMarkRenderer(editor)
 
-        val inlay = editor.inlayModel.addInlineElement(
+        val inlay = editor.inlayModel.addAfterLineEndElement(
             editor.document.textLength,
             true,
             renderer

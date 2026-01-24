@@ -35,9 +35,9 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
     fun addEofInlay(editor: Editor) {
         if (editor.isDisposed) return
         val offset = editor.document.textLength
-        val inlay = editor.inlayModel.addInlineElement(
+        val inlay = editor.inlayModel.addAfterLineEndElement(
             offset,
-            false,
+            true,
             EofMarkRenderer(editor)
         )
         if (inlay != null) {
