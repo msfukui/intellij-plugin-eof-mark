@@ -40,7 +40,7 @@ IntelliJ Platform 向けプラグインです。エディタで開いたファ�
 
 現在は Marketplace 未公開です。ローカルビルドからインストールできます。
 
-1. `./gradlew build` を実行
+1. `./gradlew buildPlugin` を実行
 2. `build/distributions/` 配下の zip ファイルを取得
 3. IntelliJ IDEA の Settings > Plugins > ⚙ > Install Plugin from Disk... から zip を選択
 
