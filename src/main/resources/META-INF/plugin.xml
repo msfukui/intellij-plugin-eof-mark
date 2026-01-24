@@ -1,0 +1,11 @@
+<idea-plugin>
+    <id>com.github.msfukui.intellijplugineofmark</id>
+    <name>EOF Mark</name>
+    <vendor>msfukui</vendor>
+
+    <description><![CDATA[
+    Displays an [EOF] marker at the end of files in the editor.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+</idea-plugin>
