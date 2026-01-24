@@ -56,6 +56,19 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         assertEquals(newLength, inlays[0].offset)
     }
 
+    fun testInlayMovesAfterTextDelete() {
+        myFixture.configureByText("test.txt", "Hello\nWorld\nEnd")
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            myFixture.editor.document.deleteString(5, 11) // "\nWorld" を削除
+        }
+
+        val newLength = myFixture.editor.document.textLength
+        val inlays = getEofInlays()
+        assertEquals(1, inlays.size)
+        assertEquals(newLength, inlays[0].offset)
+    }
+
     fun testInlayRendererIsEofMarkRenderer() {
         myFixture.configureByText("test.txt", "Hello")
 
