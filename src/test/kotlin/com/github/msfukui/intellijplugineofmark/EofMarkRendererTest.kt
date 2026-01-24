@@ -14,19 +14,9 @@ class EofMarkRendererTest : BasePlatformTestCase() {
             editor.document.textLength,
             true,
             renderer
-        )
-        assertNotNull(inlay)
-        val width = renderer.calcWidthInPixels(inlay!!)
+        )!!
+        val width = renderer.calcWidthInPixels(inlay)
         assertTrue("Width should be positive, got: $width", width > 0)
-    }
-
-    fun testGetColorReturnsNonNull() {
-        myFixture.configureByText("test.txt", "Hello")
-        val editor = myFixture.editor
-        val renderer = EofMarkRenderer(editor)
-
-        val color = renderer.getColor()
-        assertNotNull("Color should not be null", color)
     }
 
     fun testGetColorMatchesLineNumbersColorOrGray() {
