@@ -34,10 +34,10 @@ jobs:
         run: |
           if [ -n "${{ steps.latest_tag.outputs.tag_date }}" ]; then
             SINCE="${{ steps.latest_tag.outputs.tag_date }}"
-            PRS=$(gh pr list --state merged --base main --json number,labels,mergedAt \
-              --jq "[.[] | select(.mergedAt > \"$SINCE\")]")
+            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt | \
+              jq --arg since "$SINCE" '[.[] | select((.mergedAt | fromdateiso8601) > ($since | fromdateiso8601))]')
           else
-            PRS=$(gh pr list --state merged --base main --json number,labels,mergedAt)
+            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
           fi
           echo "prs<<EOF" >> "$GITHUB_OUTPUT"
           echo "$PRS" >> "$GITHUB_OUTPUT"
