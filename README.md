@@ -43,7 +43,7 @@ GitHub Actions の手動トリガーでセマンティックバージョニン�
 ### 手順
 
 1. PR に `release:major`、`release:minor`、`release:patch` のいずれかのラベルを付与してマージ
-2. リリースしたいタイミングで GitHub Actions の "Run workflow" または `gh workflow run release` を実行
+2. リリースしたいタイミングで GitHub Actions の "Run workflow" または `gh workflow run "Release"`（または `gh workflow run release.yml`）を実行
 3. 前回リリース以降のマージ済み PR のラベルから最も影響の大きいバンプレベルが自動決定される
 4. `gradle.properties` 更新 → ビルド → タグ作成 → GitHub Release 作成（zip 添付）
 
