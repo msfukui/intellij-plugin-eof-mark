@@ -121,18 +121,6 @@ jobs:
           git tag "$TAG"
           git push origin "$TAG"
 
-      - name: Extract changelog
-        id: changelog
-        run: |
-          VERSION="${{ steps.new_version.outputs.version }}"
-          CHANGELOG=$(awk "/^## ${VERSION//./\\.}/{found=1; next} /^## [0-9]/{if(found) exit} found{print}" CHANGELOG.md)
-          if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="Release ${VERSION}"
-          fi
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$CHANGELOG" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -140,5 +128,5 @@ jobs:
           TAG="v${{ steps.new_version.outputs.version }}"
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes '${{ steps.changelog.outputs.body }}' \
+            --generate-notes \
             "${{ steps.artifact.outputs.artifact }}"
