@@ -1,6 +1,6 @@
 [![Build and Test](https://github.com/msfukui/intellij-plugin-eof-mark/actions/workflows/build.yml/badge.svg)](https://github.com/msfukui/intellij-plugin-eof-mark/actions/workflows/build.yml)
 
-# EOF Mark
+# IntelliJ Plugin EOF Mark
 
 IntelliJ Platform 向けプラグインです。エディタで開いたファイルの末尾に `[EOF]` マーカーを表示します。
 
@@ -46,4 +46,8 @@ IntelliJ Platform 向けプラグインです。エディタで開いたファ�
 
 ## ライセンス
 
-MIT
+[MIT](https://opensource.org/licenses/MIT)
+
+## その他
+
+このプロダクトは [Claude Code](https://claude.com/claude-code) を使用して作成されています。
