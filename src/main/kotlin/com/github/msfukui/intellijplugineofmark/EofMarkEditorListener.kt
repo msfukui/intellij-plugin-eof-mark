@@ -15,6 +15,7 @@ import com.intellij.openapi.startup.ProjectActivity
 class EofMarkEditorListener(private val project: Project) : EditorFactoryListener {
 
     private val editorInlays = mutableMapOf<Editor, Inlay<*>>()
+    private val editorCaretListeners = mutableMapOf<Editor, CaretListener>()
 
     override fun editorCreated(event: EditorFactoryEvent) {
         val editor = event.editor
@@ -31,6 +32,9 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         val editor = event.editor
         if (editor.project != project) return
         editorInlays.remove(editor)?.dispose()
+        editorCaretListeners.remove(editor)?.let {
+            editor.caretModel.removeCaretListener(it)
+        }
     }
 
     fun addEofInlay(editor: Editor) {
@@ -48,16 +52,14 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
 
     private fun addCaretGuard(editor: Editor) {
         var adjusting = false
-        editor.caretModel.addCaretListener(object : CaretListener {
+        val listener = object : CaretListener {
             override fun caretPositionChanged(event: CaretEvent) {
                 if (adjusting) return
                 val caret = event.caret ?: return
                 val textLength = editor.document.textLength
                 if (caret.offset != textLength) return
 
-                val lastLine = editor.document.lineCount - 1
-                val lineStartOffset = editor.document.getLineStartOffset(lastLine)
-                val expectedColumn = textLength - lineStartOffset
+                val expectedColumn = editor.offsetToVisualPosition(textLength).column
                 if (caret.visualPosition.column > expectedColumn) {
                     adjusting = true
                     try {
@@ -67,7 +69,9 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
                     }
                 }
             }
-        })
+        }
+        editor.caretModel.addCaretListener(listener)
+        editorCaretListeners[editor] = listener
     }
 }
 
