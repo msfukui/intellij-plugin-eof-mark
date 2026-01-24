@@ -1,5 +1,6 @@
 package com.github.msfukui.intellijplugineofmark
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
@@ -16,11 +17,17 @@ class EofMarkEditorListener : EditorFactoryListener {
 
     override fun editorCreated(event: EditorFactoryEvent) {
         val editor = event.editor
-        addEofInlay(editor)
+        ApplicationManager.getApplication().invokeLater {
+            addEofInlay(editor)
+        }
 
         editor.document.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
-                updateEofInlay(editor)
+                ApplicationManager.getApplication().invokeLater {
+                    if (!editor.isDisposed) {
+                        updateEofInlay(editor)
+                    }
+                }
             }
         })
     }
@@ -30,7 +37,8 @@ class EofMarkEditorListener : EditorFactoryListener {
         editorInlays.remove(editor)?.dispose()
     }
 
-    private fun addEofInlay(editor: Editor) {
+    fun addEofInlay(editor: Editor) {
+        if (editor.isDisposed) return
         val offset = editor.document.textLength
         val inlay = editor.inlayModel.addAfterLineEndElement(
             offset,
@@ -51,6 +59,16 @@ class EofMarkEditorListener : EditorFactoryListener {
 class EofMarkProjectActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         val listener = EofMarkEditorListener()
-        EditorFactory.getInstance().addEditorFactoryListener(listener, project)
+
+        ApplicationManager.getApplication().invokeAndWait {
+            // 既に開かれているエディタにもマーカーを追加
+            for (editor in EditorFactory.getInstance().allEditors) {
+                if (editor.project == project) {
+                    listener.addEofInlay(editor)
+                }
+            }
+            // 今後作成されるエディタ用にリスナーを登録
+            EditorFactory.getInstance().addEditorFactoryListener(listener, project)
+        }
     }
 }
