@@ -4,8 +4,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
-import com.intellij.openapi.editor.event.DocumentEvent
-import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.editor.event.CaretEvent
+import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.project.Project
@@ -19,11 +19,7 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         val editor = event.editor
         if (editor.project != project) return
         addEofInlay(editor)
-        editor.document.addDocumentListener(object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) {
-                updateEofInlay(editor)
-            }
-        }, project)
+        addCaretGuard(editor)
     }
 
     override fun editorReleased(event: EditorFactoryEvent) {
@@ -35,7 +31,7 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
     fun addEofInlay(editor: Editor) {
         if (editor.isDisposed) return
         val offset = editor.document.textLength
-        val inlay = editor.inlayModel.addAfterLineEndElement(
+        val inlay = editor.inlayModel.addInlineElement(
             offset,
             true,
             EofMarkRenderer(editor)
@@ -45,9 +41,28 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         }
     }
 
-    private fun updateEofInlay(editor: Editor) {
-        editorInlays.remove(editor)?.dispose()
-        addEofInlay(editor)
+    private fun addCaretGuard(editor: Editor) {
+        var adjusting = false
+        editor.caretModel.addCaretListener(object : CaretListener {
+            override fun caretPositionChanged(event: CaretEvent) {
+                if (adjusting) return
+                val caret = event.caret ?: return
+                val textLength = editor.document.textLength
+                if (caret.offset != textLength) return
+
+                val lastLine = editor.document.lineCount - 1
+                val lineStartOffset = editor.document.getLineStartOffset(lastLine)
+                val expectedColumn = textLength - lineStartOffset
+                if (caret.visualPosition.column > expectedColumn) {
+                    adjusting = true
+                    try {
+                        caret.moveToOffset(textLength)
+                    } finally {
+                        adjusting = false
+                    }
+                }
+            }
+        })
     }
 }
 

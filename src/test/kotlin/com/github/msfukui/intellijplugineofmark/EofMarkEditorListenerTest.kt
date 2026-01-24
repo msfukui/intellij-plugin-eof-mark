@@ -8,7 +8,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
 
     private fun getEofInlays(): List<Inlay<*>> {
         val editor = myFixture.editor
-        return editor.inlayModel.getAfterLineEndElementsInRange(0, editor.document.textLength)
+        return editor.inlayModel.getInlineElementsInRange(0, editor.document.textLength)
             .filter { it.renderer is EofMarkRenderer }
     }
 
