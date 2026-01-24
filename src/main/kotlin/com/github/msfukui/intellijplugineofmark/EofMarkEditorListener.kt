@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
+import com.intellij.openapi.editor.VisualPosition
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
@@ -18,6 +19,10 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
     override fun editorCreated(event: EditorFactoryEvent) {
         val editor = event.editor
         if (editor.project != project) return
+        setupEditor(editor)
+    }
+
+    fun setupEditor(editor: Editor) {
         addEofInlay(editor)
         addCaretGuard(editor)
     }
@@ -56,7 +61,7 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
                 if (caret.visualPosition.column > expectedColumn) {
                     adjusting = true
                     try {
-                        caret.moveToOffset(textLength)
+                        caret.moveToVisualPosition(VisualPosition(caret.visualPosition.line, expectedColumn))
                     } finally {
                         adjusting = false
                     }
@@ -70,10 +75,10 @@ class EofMarkProjectActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         ApplicationManager.getApplication().invokeAndWait {
             val listener = EofMarkEditorListener(project)
-            // 既に開かれているエディタにもマーカーを追加
+            // 既に開かれているエディタにもマーカーとカーソル制御を追加
             for (editor in EditorFactory.getInstance().allEditors) {
                 if (editor.project == project) {
-                    listener.addEofInlay(editor)
+                    listener.setupEditor(editor)
                 }
             }
             // 今後作成されるエディタ用にリスナーを登録
