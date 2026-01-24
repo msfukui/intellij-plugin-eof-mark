@@ -4,6 +4,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.project.Project
@@ -17,6 +19,11 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         val editor = event.editor
         if (editor.project != project) return
         addEofInlay(editor)
+        editor.document.addDocumentListener(object : DocumentListener {
+            override fun documentChanged(event: DocumentEvent) {
+                updateEofInlay(editor)
+            }
+        }, project)
     }
 
     override fun editorReleased(event: EditorFactoryEvent) {
@@ -30,12 +37,17 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         val offset = editor.document.textLength
         val inlay = editor.inlayModel.addInlineElement(
             offset,
-            true,
+            false,
             EofMarkRenderer(editor)
         )
         if (inlay != null) {
             editorInlays[editor] = inlay
         }
+    }
+
+    private fun updateEofInlay(editor: Editor) {
+        editorInlays.remove(editor)?.dispose()
+        addEofInlay(editor)
     }
 }
 
