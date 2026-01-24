@@ -1,7 +1,9 @@
 package com.github.msfukui.intellijplugineofmark
 
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
+import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class EofMarkEditorListenerTest : BasePlatformTestCase() {
@@ -69,11 +71,73 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         assertEquals(newLength, inlays[0].offset)
     }
 
+    fun testCursorCannotMovePastEofMarker() {
+        myFixture.configureByText("test.txt", "Hello")
+        val editor = myFixture.editor
+        val textLength = editor.document.textLength
+
+        editor.caretModel.moveToOffset(textLength)
+        val visualColumnAtEnd = editor.caretModel.visualPosition.column
+
+        myFixture.performEditorAction("EditorRight")
+
+        assertEquals(
+            "Cursor visual position should not move past the end of document text",
+            visualColumnAtEnd, editor.caretModel.visualPosition.column
+        )
+    }
+
     fun testInlayRendererIsEofMarkRenderer() {
         myFixture.configureByText("test.txt", "Hello")
 
         val inlays = getEofInlays()
         assertTrue(inlays.isNotEmpty())
         assertTrue(inlays[0].renderer is EofMarkRenderer)
+    }
+
+    fun testCursorCannotMovePastEofMarkerWithTabs() {
+        myFixture.configureByText("test.txt", "Line1\n\tEnd")
+        val editor = myFixture.editor
+        val textLength = editor.document.textLength
+
+        editor.caretModel.moveToOffset(textLength)
+        val visualColumnAtEnd = editor.caretModel.visualPosition.column
+
+        // タブ文字がある場合、visual column と文字数は異なる
+        val lastLine = editor.document.lineCount - 1
+        val lineStartOffset = editor.document.getLineStartOffset(lastLine)
+        val charCount = textLength - lineStartOffset
+        assertTrue(
+            "With tabs, visual column ($visualColumnAtEnd) should differ from char count ($charCount)",
+            visualColumnAtEnd > charCount
+        )
+
+        myFixture.performEditorAction("EditorRight")
+
+        assertEquals(
+            "Cursor visual position should not move past the end of document text with tabs",
+            visualColumnAtEnd, editor.caretModel.visualPosition.column
+        )
+    }
+
+    fun testEditorReleaseCleansUpInlayAndListener() {
+        myFixture.configureByText("test.txt", "Hello")
+        val editor = myFixture.editor
+
+        // 手動で listener を追加（postStartupActivity 由来とは別のインスタンス）
+        val listener = EofMarkEditorListener(project)
+        listener.setupEditor(editor)
+
+        // setupEditor により inlay が追加されていることを確認
+        val inlaysBefore = getEofInlays()
+        assertEquals("setupEditor should add an additional inlay", 2, inlaysBefore.size)
+
+        // editorReleased を呼んでクリーンアップ
+        val event = EditorFactoryEvent(EditorFactory.getInstance(), editor)
+        listener.editorReleased(event)
+
+        // inlay が dispose されていることを確認
+        val inlaysAfter = getEofInlays()
+        assertEquals("editorReleased should dispose the inlay", 1, inlaysAfter.size)
     }
 }
