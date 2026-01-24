@@ -8,4 +8,9 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity
+            implementation="com.github.msfukui.intellijplugineofmark.EofMarkProjectActivity"/>
+    </extensions>
 </idea-plugin>
