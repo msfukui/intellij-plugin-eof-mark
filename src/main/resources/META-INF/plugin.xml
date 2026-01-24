@@ -9,9 +9,8 @@
 
     <depends>com.intellij.modules.platform</depends>
 
-    <applicationListeners>
-        <listener
-            class="com.github.msfukui.intellijplugineofmark.EofMarkEditorListener"
-            topic="com.intellij.openapi.editor.event.EditorFactoryListener"/>
-    </applicationListeners>
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity
+            implementation="com.github.msfukui.intellijplugineofmark.EofMarkProjectActivity"/>
+    </extensions>
 </idea-plugin>

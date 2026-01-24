@@ -1,11 +1,14 @@
 package com.github.msfukui.intellijplugineofmark
 
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.startup.ProjectActivity
 
 class EofMarkEditorListener : EditorFactoryListener {
 
@@ -42,5 +45,12 @@ class EofMarkEditorListener : EditorFactoryListener {
     private fun updateEofInlay(editor: Editor) {
         editorInlays.remove(editor)?.dispose()
         addEofInlay(editor)
+    }
+}
+
+class EofMarkProjectActivity : ProjectActivity {
+    override suspend fun execute(project: Project) {
+        val listener = EofMarkEditorListener()
+        EditorFactory.getInstance().addEditorFactoryListener(listener, project)
     }
 }
