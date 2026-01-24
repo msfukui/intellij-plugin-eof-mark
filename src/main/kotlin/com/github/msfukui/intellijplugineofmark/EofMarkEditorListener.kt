@@ -9,17 +9,19 @@ import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 
-class EofMarkEditorListener : EditorFactoryListener {
+class EofMarkEditorListener(private val project: Project) : EditorFactoryListener {
 
     private val editorInlays = mutableMapOf<Editor, Inlay<*>>()
 
     override fun editorCreated(event: EditorFactoryEvent) {
         val editor = event.editor
+        if (editor.project != project) return
         addEofInlay(editor)
     }
 
     override fun editorReleased(event: EditorFactoryEvent) {
         val editor = event.editor
+        if (editor.project != project) return
         editorInlays.remove(editor)?.dispose()
     }
 
@@ -40,7 +42,7 @@ class EofMarkEditorListener : EditorFactoryListener {
 class EofMarkProjectActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         ApplicationManager.getApplication().invokeAndWait {
-            val listener = EofMarkEditorListener()
+            val listener = EofMarkEditorListener(project)
             // 既に開かれているエディタにもマーカーを追加
             for (editor in EditorFactory.getInstance().allEditors) {
                 if (editor.project == project) {
