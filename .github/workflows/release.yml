@@ -23,7 +23,7 @@ jobs:
           TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           if [ -n "$TAG" ]; then
-            TAG_DATE=$(git log -1 --format=%aI "$TAG")
+            TAG_DATE=$(git log -1 --format=%cI "$TAG")
             echo "tag_date=$TAG_DATE" >> "$GITHUB_OUTPUT"
           fi
 
