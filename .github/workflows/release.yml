@@ -135,3 +135,20 @@ jobs:
             --title "$TAG" \
             --generate-notes \
             "${{ steps.artifact.outputs.artifact }}"
+
+      - name: Get release notes
+        id: release_notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.new_version.outputs.version }}"
+          NOTES=$(gh release view "$TAG" --json body -q .body)
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to JetBrains Marketplace
+        run: ./gradlew publishPlugin
+        env:
+          JETBRAINS_MARKETPLACE_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
+          PLUGIN_CHANGE_NOTES: ${{ steps.release_notes.outputs.notes }}

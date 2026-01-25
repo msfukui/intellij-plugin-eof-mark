@@ -4,7 +4,27 @@
     <vendor>msfukui</vendor>
 
     <description><![CDATA[
-    Displays an [EOF] marker at the end of files in the editor.
+<h2>EOF Mark</h2>
+
+<p>Displays an <code>[EOF]</code> marker at the end of files in the editor, making it easy to identify where the file content ends.</p>
+
+<h3>Features</h3>
+<ul>
+  <li>Shows <code>[EOF]</code> marker at the end of every file</li>
+  <li>Lightweight and non-intrusive</li>
+</ul>
+
+<hr/>
+
+<h2>EOF Mark (日本語)</h2>
+
+<p>エディタでファイルの末尾に <code>[EOF]</code> マーカーを表示し、ファイル内容の終端を簡単に識別できるようにします。</p>
+
+<h3>機能</h3>
+<ul>
+  <li>すべてのファイルの末尾に <code>[EOF]</code> マーカーを表示</li>
+  <li>軽量で邪魔にならない</li>
+</ul>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

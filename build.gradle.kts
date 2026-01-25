@@ -41,6 +41,11 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = "242"
         }
+        changeNotes.set(providers.environmentVariable("PLUGIN_CHANGE_NOTES").orElse(""))
+    }
+
+    publishing {
+        token.set(providers.environmentVariable("JETBRAINS_MARKETPLACE_TOKEN"))
     }
 }
 
