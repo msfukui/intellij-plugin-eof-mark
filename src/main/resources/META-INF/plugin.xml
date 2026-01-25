@@ -11,7 +11,6 @@
 <h3>Features</h3>
 <ul>
   <li>Shows <code>[EOF]</code> marker at the end of every file</li>
-  <li>Prevents cursor from moving past the EOF marker</li>
   <li>Lightweight and non-intrusive</li>
 </ul>
 
@@ -24,7 +23,6 @@
 <h3>機能</h3>
 <ul>
   <li>すべてのファイルの末尾に <code>[EOF]</code> マーカーを表示</li>
-  <li>カーソルが EOF マーカーを越えて移動するのを防止</li>
   <li>軽量で邪魔にならない</li>
 </ul>
     ]]></description>
