@@ -148,9 +148,9 @@ jobs:
           # plugin.xml の <change-notes> は HTML として解釈されるため、
           # GitHub が生成した Markdown を HTML に変換する。
           # mode=gfm は hovercard 等の GitHub 固有属性が大量に付くため mode=markdown を使い、
-          # 見出しに付与されるアンカー装飾のみ取り除く。
+          # 見出しに付与されるアンカー装飾と class 属性を取り除いて素の HTML にする。
           NOTES=$(gh api /markdown -f text="$MARKDOWN" -f mode=markdown \
-            | sed -E 's|<div class="markdown-heading">(<h[1-6][^>]*>.*</h[1-6]>)<a id="user-content-[^"]*"[^>]*>.*</a></div>|\1|g')
+            | sed -E 's|<div class="markdown-heading"><h([1-6])[^>]*>(.*)</h[1-6]><a id="user-content-[^"]*"[^>]*>.*</a></div>|<h\1>\2</h\1>|g')
           {
             echo "notes<<EOF"
             echo "$NOTES"
