@@ -77,6 +77,10 @@ jobs:
         with:
           cache-disabled: true
 
+      # 変換結果は GITHUB_ENV へ書き、以降の全ステップで同じ値が見えるようにする。
+      # ステップ単位の env で渡すと、PLUGIN_CHANGE_NOTES を持たないステップで Gradle が
+      # 走った際に patchPluginXml の入力が変わり、change notes が空の成果物へ作り直されて
+      # しまう（verifyPlugin で実際に発生し、Release へ添付する zip が空になった）。
       - name: Get release notes
         id: release_notes
         env:
@@ -93,16 +97,15 @@ jobs:
           NOTES=$(gh api /markdown -f text="$MARKDOWN" -f mode=markdown \
             | sed -E 's|<div class="markdown-heading"><h([1-6])[^>]*>(.*)</h[1-6]><a id="user-content-[^"]*"[^>]*>.*</a></div>|<h\1>\2</h\1>|g')
           {
-            echo "notes<<EOF"
+            echo "PLUGIN_CHANGE_NOTES<<EOF"
             echo "$NOTES"
             echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          } >> "$GITHUB_ENV"
 
       # change notes が確定しているため、ビルドは 1 回で足りる。
+      # PLUGIN_CHANGE_NOTES は Get release notes が GITHUB_ENV へ設定済み。
       - name: Build plugin
         run: ./gradlew buildPlugin
-        env:
-          PLUGIN_CHANGE_NOTES: ${{ steps.release_notes.outputs.notes }}
 
       - name: Verify artifact
         id: artifact
@@ -163,4 +166,3 @@ jobs:
         run: ./gradlew publishPlugin
         env:
           JETBRAINS_MARKETPLACE_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
-          PLUGIN_CHANGE_NOTES: ${{ steps.release_notes.outputs.notes }}
