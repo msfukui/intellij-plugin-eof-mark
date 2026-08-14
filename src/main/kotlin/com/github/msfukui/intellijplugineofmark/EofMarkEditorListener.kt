@@ -43,7 +43,15 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         setupEditor(editor)
     }
 
+    /**
+     * マーカーとカーソル制御を追加する。
+     *
+     * 同一エディタへの二重適用を防ぐ。二重に呼ばれると前回の inlay を dispose せずに
+     * マップを上書きしてしまい、回収されない orphan が残る。CaretListener も同様に
+     * 二重登録され、editorReleased では最後の 1 つしか解除できない。
+     */
     fun setupEditor(editor: Editor) {
+        if (editorInlays.containsKey(editor)) return
         addEofInlay(editor)
         addCaretGuard(editor)
     }
