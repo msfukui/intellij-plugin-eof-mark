@@ -59,9 +59,9 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         addCaretGuard(editor)
     }
 
-    /** カーソル制御が登録されているか。マーカーとの整合性を検証するために公開している。 */
+    /** カーソル制御が登録されているか。マーカーとの整合性を検証するためにテストへ公開している。 */
     @TestOnly
-    fun hasCaretGuard(editor: Editor): Boolean = editorCaretListeners.containsKey(editor)
+    internal fun hasCaretGuard(editor: Editor): Boolean = editorCaretListeners.containsKey(editor)
 
     override fun editorReleased(event: EditorFactoryEvent) {
         val editor = event.editor
@@ -73,7 +73,7 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
     }
 
     /** @return マーカーを追加できた場合 true */
-    fun addEofInlay(editor: Editor): Boolean {
+    private fun addEofInlay(editor: Editor): Boolean {
         if (editor.isDisposed) return false
         val offset = editor.document.textLength
         val inlay = editor.inlayModel.addInlineElement(
