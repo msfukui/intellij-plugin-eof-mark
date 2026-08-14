@@ -36,21 +36,21 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testEditorHasEofInlayAfterOpen() {
-        configureWithEofMark("test.txt","Hello")
+        configureWithEofMark("test.txt", "Hello")
 
         val inlays = getEofInlays()
         assertEquals(1, inlays.size)
     }
 
     fun testInlayPositionAtEndOfDocument() {
-        configureWithEofMark("test.txt","Hello")
+        configureWithEofMark("test.txt", "Hello")
 
         val inlays = getEofInlays()
         assertEquals(myFixture.editor.document.textLength, inlays[0].offset)
     }
 
     fun testInlayOnEmptyFile() {
-        configureWithEofMark("test.txt","")
+        configureWithEofMark("test.txt", "")
 
         val inlays = getEofInlays()
         assertEquals(1, inlays.size)
@@ -58,7 +58,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayOnMultilineFile() {
-        configureWithEofMark("test.txt","Line1\nLine2\nLine3")
+        configureWithEofMark("test.txt", "Line1\nLine2\nLine3")
 
         val inlays = getEofInlays()
         assertEquals(1, inlays.size)
@@ -66,7 +66,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayMovesAfterTextInsert() {
-        configureWithEofMark("test.txt","Hello")
+        configureWithEofMark("test.txt", "Hello")
 
         val originalLength = myFixture.editor.document.textLength
         WriteCommandAction.runWriteCommandAction(project) {
@@ -80,7 +80,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayMovesAfterTextDelete() {
-        configureWithEofMark("test.txt","Hello\nWorld\nEnd")
+        configureWithEofMark("test.txt", "Hello\nWorld\nEnd")
 
         WriteCommandAction.runWriteCommandAction(project) {
             myFixture.editor.document.deleteString(5, 11) // "\nWorld" を削除
@@ -93,8 +93,10 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testCursorCannotMovePastEofMarker() {
-        configureWithEofMark("test.txt","Hello")
+        configureWithEofMark("test.txt", "Hello")
         val editor = myFixture.editor
+        // マーカーが無いとカーソルは元々末尾より先へ進まず、ガードの有無を検証できない
+        assertEquals("前提: [EOF] マーカーが存在すること", 1, getEofInlays().size)
         val textLength = editor.document.textLength
 
         editor.caretModel.moveToOffset(textLength)
@@ -109,7 +111,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayRendererIsEofMarkRenderer() {
-        configureWithEofMark("test.txt","Hello")
+        configureWithEofMark("test.txt", "Hello")
 
         val inlays = getEofInlays()
         assertTrue(inlays.isNotEmpty())
@@ -117,8 +119,10 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testCursorCannotMovePastEofMarkerWithTabs() {
-        configureWithEofMark("test.txt","Line1\n\tEnd")
+        configureWithEofMark("test.txt", "Line1\n\tEnd")
         val editor = myFixture.editor
+        // マーカーが無いとカーソルは元々末尾より先へ進まず、ガードの有無を検証できない
+        assertEquals("前提: [EOF] マーカーが存在すること", 1, getEofInlays().size)
         val textLength = editor.document.textLength
 
         editor.caretModel.moveToOffset(textLength)
@@ -142,7 +146,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testEditorReleaseCleansUpInlayAndListener() {
-        configureWithEofMark("test.txt","Hello")
+        configureWithEofMark("test.txt", "Hello")
         val editor = myFixture.editor
 
         // 手動で listener を追加（postStartupActivity 由来とは別のインスタンス）
