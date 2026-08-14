@@ -35,7 +35,9 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         }
     }
 
-    fun testEditorHasEofInlayAfterOpen() {
+    // 開いたことによる自動付与の検証は testMainEditorKindGetsEofInlay が担う。
+    // ここではマーカーが重複せず 1 つだけ存在することを確認する。
+    fun testEditorHasExactlyOneEofInlay() {
         configureWithEofMark("test.txt", "Hello")
 
         val inlays = getEofInlays()
