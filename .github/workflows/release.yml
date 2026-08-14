@@ -1,11 +1,19 @@
 name: Release
 
+# GitHub 上で release を publish すると動く。draft は Draft Release ワークフローが作る。
+# 公開だけをやり直したい場合は workflow_dispatch に既存のタグを渡す。
 on:
+  release:
+    types: [ published ]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '公開し直す release のタグ (例: v0.1.5)'
+        required: true
+        type: string
 
 permissions:
   contents: write
-  pull-requests: read
 
 concurrency:
   group: release
@@ -16,80 +24,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Resolve target tag
+        id: target
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-$EVENT_TAG}"
+          if [ -z "$TAG" ]; then
+            echo "::error::Release tag could not be determined."
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Target: $TAG (version ${TAG#v})"
+
+      # main ではなく対象タグを checkout する。workflow_dispatch で過去タグの公開を
+      # やり直す際に、main の最新コードで成果物を作ってしまうのを避けるため。
+      - name: Checkout release tag
         uses: actions/checkout@v4
         with:
+          ref: ${{ steps.target.outputs.tag }}
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Get latest release tag
-        id: latest_tag
-        run: |
-          TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          if [ -n "$TAG" ]; then
-            TAG_DATE=$(git log -1 --format=%cI "$TAG")
-            echo "tag_date=$TAG_DATE" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Collect merged PRs since last release
-        id: collect_prs
+      # タグが指すコミットの gradle.properties は前バージョンのままなので、
+      # ビルド用に対象バージョンへ書き換える（この時点ではコミットしない）。
+      - name: Set version for build
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.target.outputs.version }}
         run: |
-          if [ -n "${{ steps.latest_tag.outputs.tag_date }}" ]; then
-            SINCE="${{ steps.latest_tag.outputs.tag_date }}"
-            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt | \
-              jq --arg since "$SINCE" '[.[] | select((.mergedAt | fromdateiso8601) > ($since | fromdateiso8601))]')
-          else
-            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
-          fi
-          {
-            echo "prs<<EOF"
-            echo "$PRS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Determine version bump level
-        id: bump_level
-        run: |
-          PRS='${{ steps.collect_prs.outputs.prs }}'
-          HAS_MAJOR=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:major")')
-          HAS_MINOR=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:minor")')
-          HAS_PATCH=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:patch")')
-
-          if [ "$HAS_MAJOR" = "true" ]; then
-            echo "level=major" >> "$GITHUB_OUTPUT"
-          elif [ "$HAS_MINOR" = "true" ]; then
-            echo "level=minor" >> "$GITHUB_OUTPUT"
-          elif [ "$HAS_PATCH" = "true" ]; then
-            echo "level=patch" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::No PRs with release:major, release:minor, or release:patch labels found since last release."
-            exit 1
-          fi
-
-      - name: Calculate new version
-        id: new_version
-        run: |
-          CURRENT=$(grep '^pluginVersion' gradle.properties | sed 's/.*= *//')
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          LEVEL="${{ steps.bump_level.outputs.level }}"
-
-          if [ "$LEVEL" = "major" ]; then
-            NEW_VERSION="$((MAJOR + 1)).0.0"
-          elif [ "$LEVEL" = "minor" ]; then
-            NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
-          else
-            NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
-          fi
-
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "New version: $NEW_VERSION (bump: $LEVEL, from: $CURRENT)"
-
-      - name: Update gradle.properties
-        run: |
-          sed -i "s/^pluginVersion = .*/pluginVersion = ${{ steps.new_version.outputs.version }}/" gradle.properties
+          sed -i "s/^pluginVersion = .*/pluginVersion = ${VERSION}/" gradle.properties
+          grep '^pluginVersion' gradle.properties
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -100,63 +68,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build plugin
-        run: ./gradlew buildPlugin
-
-      - name: Verify artifact
-        run: |
-          ZIP="build/distributions/intellij-plugin-eof-mark-${{ steps.new_version.outputs.version }}.zip"
-          if [ ! -f "$ZIP" ]; then
-            echo "::error::Expected artifact not found: $ZIP"
-            ls -la build/distributions/ || true
-            exit 1
-          fi
-          echo "artifact=$ZIP" >> "$GITHUB_OUTPUT"
-        id: artifact
-
-      # コミット・タグ・Release の作成より前に実行する。
-      # 失敗しても中途半端な状態が残らないようにするため。
-      - name: Verify plugin compatibility
-        run: ./gradlew verifyPlugin
-
-      - name: Upload verification reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugin-verifier-reports
-          path: build/reports/pluginVerifier/
-          if-no-files-found: warn
-
-      - name: Commit version update
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gradle.properties
-          git commit -m "Bump version to ${{ steps.new_version.outputs.version }}"
-          git push origin main
-
-      - name: Create and push tag
-        run: |
-          TAG="v${{ steps.new_version.outputs.version }}"
-          git tag "$TAG"
-          git push origin "$TAG"
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="v${{ steps.new_version.outputs.version }}"
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --generate-notes \
-            "${{ steps.artifact.outputs.artifact }}"
-
       - name: Get release notes
         id: release_notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.target.outputs.tag }}
         run: |
-          TAG="v${{ steps.new_version.outputs.version }}"
+          # release 本文をシェルへ直接展開するとスクリプトインジェクションになるため、
+          # gh 経由で取得する。
           MARKDOWN=$(gh release view "$TAG" --json body -q .body)
           # plugin.xml の <change-notes> は HTML として解釈されるため、
           # GitHub が生成した Markdown を HTML に変換する。
@@ -170,10 +89,63 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Rebuild plugin with change notes
-        run: ./gradlew clean buildPlugin
+      # change notes が確定しているため、ビルドは 1 回で足りる。
+      - name: Build plugin
+        run: ./gradlew buildPlugin
         env:
           PLUGIN_CHANGE_NOTES: ${{ steps.release_notes.outputs.notes }}
+
+      - name: Verify artifact
+        id: artifact
+        run: |
+          ZIP="build/distributions/intellij-plugin-eof-mark-${{ steps.target.outputs.version }}.zip"
+          if [ ! -f "$ZIP" ]; then
+            echo "::error::Expected artifact not found: $ZIP"
+            ls -la build/distributions/ || true
+            exit 1
+          fi
+          echo "artifact=$ZIP" >> "$GITHUB_OUTPUT"
+
+      # main への push と公開より前に実行する。失敗しても副作用が残らないようにするため。
+      - name: Verify plugin compatibility
+        run: ./gradlew verifyPlugin
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-verifier-reports
+          path: build/reports/pluginVerifier/
+          if-no-files-found: warn
+
+      # ここまではタグを detached HEAD で checkout しているため、そのまま commit しても
+      # ローカルの main ref は動かず push が空振りする。明示的に main へ切り替えてから
+      # バージョンを再適用する。build/ は gitignore 済みなので成果物は失われない。
+      - name: Commit version update to main
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -f -B main origin/main
+
+          sed -i "s/^pluginVersion = .*/pluginVersion = ${VERSION}/" gradle.properties
+          git add gradle.properties
+          # 公開のみをやり直す場合は既にコミット済みなので、差分が無ければ何もしない。
+          if git diff --cached --quiet; then
+            echo "gradle.properties on main is already ${VERSION}."
+          else
+            git commit -m "Bump version to ${VERSION}"
+            git push origin main
+          fi
+
+      - name: Attach artifact to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.target.outputs.tag }}" \
+            "${{ steps.artifact.outputs.artifact }}" --clobber
 
       - name: Publish to JetBrains Marketplace
         run: ./gradlew publishPlugin

@@ -1,0 +1,125 @@
+name: Draft Release
+
+# main への push ごとに次バージョンの draft release を作り直す。
+# タグは作られず、GitHub 上で release を publish した時点で Release ワークフローが動く。
+on:
+  push:
+    branches: [ main ]
+    # paths-ignore は設定しない。label-check.yml が全 PR にリリースラベルを要求する
+    # ため、Markdown だけの変更もリリース対象になる。除外すると「ラベルはあるのに
+    # draft が更新されない」状態になる。
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: draft-release
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest release tag
+        id: latest_tag
+        run: |
+          TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
+          {
+            echo "tag=$TAG"
+            if [ -n "$TAG" ]; then
+              echo "tag_date=$(git log -1 --format=%cI "$TAG")"
+            fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Collect merged PRs since last release
+        id: collect_prs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ steps.latest_tag.outputs.tag_date }}" ]; then
+            SINCE="${{ steps.latest_tag.outputs.tag_date }}"
+            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt | \
+              jq --arg since "$SINCE" '[.[] | select((.mergedAt | fromdateiso8601) > ($since | fromdateiso8601))]')
+          else
+            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
+          fi
+          {
+            echo "prs<<EOF"
+            echo "$PRS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Determine version bump level
+        id: bump_level
+        run: |
+          PRS='${{ steps.collect_prs.outputs.prs }}'
+          HAS_MAJOR=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:major")')
+          HAS_MINOR=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:minor")')
+          HAS_PATCH=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:patch")')
+
+          if [ "$HAS_MAJOR" = "true" ]; then
+            LEVEL="major"
+          elif [ "$HAS_MINOR" = "true" ]; then
+            LEVEL="minor"
+          elif [ "$HAS_PATCH" = "true" ]; then
+            LEVEL="patch"
+          else
+            # リリース直後のバージョンコミットや、ラベル対象外の直接 push で到達する。
+            # draft を作る理由がないだけなので、失敗させずスキップする。
+            echo "No PRs with release labels since last release. Skipping."
+            echo "level=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate next version
+        id: next_version
+        if: steps.bump_level.outputs.level != ''
+        run: |
+          # 直近のタグを基準にする。draft のタグ名がバージョンの正であり、
+          # gradle.properties は publish 時に追随させる。
+          TAG="${{ steps.latest_tag.outputs.tag }}"
+          if [ -n "$TAG" ]; then
+            CURRENT="${TAG#v}"
+          else
+            CURRENT=$(grep '^pluginVersion' gradle.properties | sed 's/.*= *//')
+          fi
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case "${{ steps.bump_level.outputs.level }}" in
+            major) NEXT="$((MAJOR + 1)).0.0" ;;
+            minor) NEXT="${MAJOR}.$((MINOR + 1)).0" ;;
+            *)     NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+          esac
+
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Next version: $NEXT (bump: ${{ steps.bump_level.outputs.level }}, from: $CURRENT)"
+
+      - name: Recreate draft release
+        if: steps.bump_level.outputs.level != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.next_version.outputs.version }}"
+
+          # 既存の draft をすべて削除してから作り直す。前回リリース以降の PR と
+          # ラベルを常に正しく反映させるため、状態を持たない方針とする。
+          gh release list --limit 50 --json tagName,isDraft \
+            --jq '.[] | select(.isDraft) | .tagName' | while read -r d; do
+            echo "Deleting existing draft: $d"
+            gh release delete "$d" --yes
+          done
+
+          gh release create "$TAG" \
+            --draft \
+            --target main \
+            --title "$TAG" \
+            --generate-notes
+          echo "Created draft release $TAG"
