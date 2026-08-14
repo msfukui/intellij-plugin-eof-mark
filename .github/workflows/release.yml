@@ -44,9 +44,11 @@ jobs:
           else
             PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
           fi
-          echo "prs<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PRS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "prs<<EOF"
+            echo "$PRS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Determine version bump level
         id: bump_level
@@ -149,9 +151,11 @@ jobs:
           # 見出しに付与されるアンカー装飾のみ取り除く。
           NOTES=$(gh api /markdown -f text="$MARKDOWN" -f mode=markdown \
             | sed -E 's|<div class="markdown-heading">(<h[1-6][^>]*>.*</h[1-6]>)<a id="user-content-[^"]*"[^>]*>.*</a></div>|\1|g')
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Rebuild plugin with change notes
         run: ./gradlew clean buildPlugin
