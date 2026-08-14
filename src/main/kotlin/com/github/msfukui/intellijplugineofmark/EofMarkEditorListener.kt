@@ -12,6 +12,7 @@ import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
+import org.jetbrains.annotations.TestOnly
 
 class EofMarkEditorListener(private val project: Project) : EditorFactoryListener {
 
@@ -52,9 +53,15 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
      */
     fun setupEditor(editor: Editor) {
         if (editorInlays.containsKey(editor)) return
-        addEofInlay(editor)
+        // マーカーを追加できなかった場合はカーソル制御も登録しない。
+        // 自分が何も描いていないのにカーソルを拘束するのを避ける。
+        if (!addEofInlay(editor)) return
         addCaretGuard(editor)
     }
+
+    /** カーソル制御が登録されているか。マーカーとの整合性を検証するために公開している。 */
+    @TestOnly
+    fun hasCaretGuard(editor: Editor): Boolean = editorCaretListeners.containsKey(editor)
 
     override fun editorReleased(event: EditorFactoryEvent) {
         val editor = event.editor
@@ -65,17 +72,17 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
         }
     }
 
-    fun addEofInlay(editor: Editor) {
-        if (editor.isDisposed) return
+    /** @return マーカーを追加できた場合 true */
+    fun addEofInlay(editor: Editor): Boolean {
+        if (editor.isDisposed) return false
         val offset = editor.document.textLength
         val inlay = editor.inlayModel.addInlineElement(
             offset,
             true,
             EofMarkRenderer(editor)
-        )
-        if (inlay != null) {
-            editorInlays[editor] = inlay
-        }
+        ) ?: return false
+        editorInlays[editor] = inlay
+        return true
     }
 
     private fun addCaretGuard(editor: Editor) {
