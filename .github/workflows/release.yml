@@ -44,9 +44,11 @@ jobs:
           else
             PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
           fi
-          echo "prs<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$PRS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "prs<<EOF"
+            echo "$PRS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Determine version bump level
         id: bump_level
@@ -142,10 +144,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ steps.new_version.outputs.version }}"
-          NOTES=$(gh release view "$TAG" --json body -q .body)
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          MARKDOWN=$(gh release view "$TAG" --json body -q .body)
+          # plugin.xml の <change-notes> は HTML として解釈されるため、
+          # GitHub が生成した Markdown を HTML に変換する。
+          # mode=gfm は hovercard 等の GitHub 固有属性が大量に付くため mode=markdown を使い、
+          # 見出しに付与されるアンカー装飾と class 属性を取り除いて素の HTML にする。
+          NOTES=$(gh api /markdown -f text="$MARKDOWN" -f mode=markdown \
+            | sed -E 's|<div class="markdown-heading"><h([1-6])[^>]*>(.*)</h[1-6]><a id="user-content-[^"]*"[^>]*>.*</a></div>|<h\1>\2</h\1>|g')
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Rebuild plugin with change notes
         run: ./gradlew clean buildPlugin
