@@ -71,7 +71,11 @@ gh workflow run release.yml -f tag=v0.1.5
 
 ## インストール
 
-現在は Marketplace 未公開です。ローカルビルドからインストールできます。
+[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/29906-eof-mark) で公開しています。
+
+IntelliJ IDEA の Settings > Plugins > Marketplace で "EOF Mark" を検索してインストールしてください。
+
+### ローカルビルドからインストールする場合
 
 1. `./gradlew buildPlugin` を実行
 2. `build/distributions/` 配下の zip ファイルを取得
