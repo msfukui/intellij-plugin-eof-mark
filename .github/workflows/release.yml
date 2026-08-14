@@ -114,6 +114,19 @@ jobs:
           echo "artifact=$ZIP" >> "$GITHUB_OUTPUT"
         id: artifact
 
+      # コミット・タグ・Release の作成より前に実行する。
+      # 失敗しても中途半端な状態が残らないようにするため。
+      - name: Verify plugin compatibility
+        run: ./gradlew verifyPlugin
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-verifier-reports
+          path: build/reports/pluginVerifier/
+          if-no-files-found: warn
+
       - name: Commit version update
         run: |
           git config user.name "github-actions[bot]"
