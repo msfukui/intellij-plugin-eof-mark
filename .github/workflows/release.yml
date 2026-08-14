@@ -41,16 +41,22 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Target: $TAG (version ${TAG#v})"
 
-      - name: Checkout
+      # main ではなく対象タグを checkout する。workflow_dispatch で過去タグの公開を
+      # やり直す際に、main の最新コードで成果物を作ってしまうのを避けるため。
+      - name: Checkout release tag
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.target.outputs.tag }}
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Update gradle.properties
+      # タグが指すコミットの gradle.properties は前バージョンのままなので、
+      # ビルド用に対象バージョンへ書き換える（この時点ではコミットしない）。
+      - name: Set version for build
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
         run: |
-          sed -i "s/^pluginVersion = .*/pluginVersion = ${{ steps.target.outputs.version }}/" gradle.properties
+          sed -i "s/^pluginVersion = .*/pluginVersion = ${VERSION}/" gradle.properties
           grep '^pluginVersion' gradle.properties
 
       - name: Set up JDK 21
@@ -112,16 +118,25 @@ jobs:
           path: build/reports/pluginVerifier/
           if-no-files-found: warn
 
-      - name: Commit version update
+      # ここまではタグを detached HEAD で checkout しているため、そのまま commit しても
+      # ローカルの main ref は動かず push が空振りする。明示的に main へ切り替えてから
+      # バージョンを再適用する。build/ は gitignore 済みなので成果物は失われない。
+      - name: Commit version update to main
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -f -B main origin/main
+
+          sed -i "s/^pluginVersion = .*/pluginVersion = ${VERSION}/" gradle.properties
           git add gradle.properties
           # 公開のみをやり直す場合は既にコミット済みなので、差分が無ければ何もしない。
           if git diff --cached --quiet; then
-            echo "gradle.properties is already up to date."
+            echo "gradle.properties on main is already ${VERSION}."
           else
-            git commit -m "Bump version to ${{ steps.target.outputs.version }}"
+            git commit -m "Bump version to ${VERSION}"
             git push origin main
           fi
 

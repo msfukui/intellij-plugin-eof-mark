@@ -5,8 +5,9 @@ name: Draft Release
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-      - '**.md'
+    # paths-ignore は設定しない。label-check.yml が全 PR にリリースラベルを要求する
+    # ため、Markdown だけの変更もリリース対象になる。除外すると「ラベルはあるのに
+    # draft が更新されない」状態になる。
 
 permissions:
   contents: write
