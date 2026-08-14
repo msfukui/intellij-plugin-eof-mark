@@ -168,6 +168,31 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         assertEquals("editorReleased should dispose the inlay", 1, inlaysAfter.size)
     }
 
+    fun testSetupEditorIsIdempotent() {
+        val factory = EditorFactory.getInstance()
+        val editor = factory.createEditor(factory.createDocument("Hello"), project, EditorKind.MAIN_EDITOR)
+        try {
+            val listener = EofMarkEditorListener(project)
+            listener.setupEditor(editor)
+            val afterFirst = eofInlaysOf(editor).size
+
+            listener.setupEditor(editor)
+            assertEquals(
+                "setupEditor を 2 回呼んでもマーカーは増えない",
+                afterFirst, eofInlaysOf(editor).size
+            )
+
+            // 2 回目の呼び出しで上書きされた inlay が orphan として残らないこと
+            listener.editorReleased(EditorFactoryEvent(factory, editor))
+            assertEquals(
+                "editorReleased で listener が付与した分が完全に回収される",
+                afterFirst - 1, eofInlaysOf(editor).size
+            )
+        } finally {
+            factory.releaseEditor(editor)
+        }
+    }
+
     fun testUntypedEditorGetsNoEofInlay() {
         val factory = EditorFactory.getInstance()
         val document = factory.createDocument("Hello")
