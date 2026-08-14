@@ -1,0 +1,32 @@
+name: Workflow Audit
+
+# ワークフロー自体のセキュリティ検査。仕組みが無いとワークフローを追加するたびに
+# 同じ指摘が積み上がるため、変更時に必ず走らせる。
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/**'
+
+permissions: {}
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          # SARIF を Code Scanning へ送るには security-events: write が必要になる。
+          # 権限を絞る方針を優先し、ジョブの成否のみで判断する。
+          advanced-security: false
