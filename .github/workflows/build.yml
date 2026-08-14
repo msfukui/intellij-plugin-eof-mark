@@ -29,8 +29,14 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # cache-provider の既定は 'enhanced' で、gradle-actions-caching という
+      # MIT ではないプロプライエタリ component が読み込まれ、その Terms of Use を
+      # 受諾したことになる。'basic' は actions/cache を包んだ MIT の実装なので、
+      # キャッシュの利便性を保ったまま MIT ライセンス内に留まれる。
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
 
       - name: Build
         run: ./gradlew build
