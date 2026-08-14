@@ -1,35 +1,56 @@
 package com.github.msfukui.intellijplugineofmark
 
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class EofMarkEditorListenerTest : BasePlatformTestCase() {
 
-    private fun getEofInlays(): List<Inlay<*>> {
-        val editor = myFixture.editor
-        return editor.inlayModel.getInlineElementsInRange(0, editor.document.textLength)
+    private fun eofInlaysOf(editor: Editor): List<Inlay<*>> =
+        editor.inlayModel.getInlineElementsInRange(0, editor.document.textLength)
             .filter { it.renderer is EofMarkRenderer }
+
+    private fun getEofInlays(): List<Inlay<*>> = eofInlaysOf(myFixture.editor)
+
+    /**
+     * ファイルを開き、[EOF] マーカーが付いた状態にする。
+     *
+     * ヘッドレステストでは FileEditorManager が TestEditorManagerImpl に差し替わり、
+     * createEditor(document, project) でエディタを生成するため myFixture.editor は
+     * EditorKind.UNTYPED になる（本番のファイルタブは MAIN_EDITOR）。
+     * そのため本番の postStartupActivity が登録したリスナーからは対象外と判定される。
+     * インレイやカーソル制御の挙動そのものを検証するために、ここで明示的に付与する。
+     *
+     * 将来 TestEditorManagerImpl が MAIN_EDITOR を使うようになった場合は既にマーカーが
+     * 付いているため、二重付与にならないよう条件付きにしてある。
+     */
+    private fun configureWithEofMark(fileName: String, text: String) {
+        myFixture.configureByText(fileName, text)
+        if (getEofInlays().isEmpty()) {
+            EofMarkEditorListener(project).setupEditor(myFixture.editor)
+        }
     }
 
     fun testEditorHasEofInlayAfterOpen() {
-        myFixture.configureByText("test.txt", "Hello")
+        configureWithEofMark("test.txt","Hello")
 
         val inlays = getEofInlays()
         assertEquals(1, inlays.size)
     }
 
     fun testInlayPositionAtEndOfDocument() {
-        myFixture.configureByText("test.txt", "Hello")
+        configureWithEofMark("test.txt","Hello")
 
         val inlays = getEofInlays()
         assertEquals(myFixture.editor.document.textLength, inlays[0].offset)
     }
 
     fun testInlayOnEmptyFile() {
-        myFixture.configureByText("test.txt", "")
+        configureWithEofMark("test.txt","")
 
         val inlays = getEofInlays()
         assertEquals(1, inlays.size)
@@ -37,7 +58,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayOnMultilineFile() {
-        myFixture.configureByText("test.txt", "Line1\nLine2\nLine3")
+        configureWithEofMark("test.txt","Line1\nLine2\nLine3")
 
         val inlays = getEofInlays()
         assertEquals(1, inlays.size)
@@ -45,7 +66,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayMovesAfterTextInsert() {
-        myFixture.configureByText("test.txt", "Hello")
+        configureWithEofMark("test.txt","Hello")
 
         val originalLength = myFixture.editor.document.textLength
         WriteCommandAction.runWriteCommandAction(project) {
@@ -59,7 +80,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayMovesAfterTextDelete() {
-        myFixture.configureByText("test.txt", "Hello\nWorld\nEnd")
+        configureWithEofMark("test.txt","Hello\nWorld\nEnd")
 
         WriteCommandAction.runWriteCommandAction(project) {
             myFixture.editor.document.deleteString(5, 11) // "\nWorld" を削除
@@ -72,7 +93,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testCursorCannotMovePastEofMarker() {
-        myFixture.configureByText("test.txt", "Hello")
+        configureWithEofMark("test.txt","Hello")
         val editor = myFixture.editor
         val textLength = editor.document.textLength
 
@@ -88,7 +109,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testInlayRendererIsEofMarkRenderer() {
-        myFixture.configureByText("test.txt", "Hello")
+        configureWithEofMark("test.txt","Hello")
 
         val inlays = getEofInlays()
         assertTrue(inlays.isNotEmpty())
@@ -96,7 +117,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testCursorCannotMovePastEofMarkerWithTabs() {
-        myFixture.configureByText("test.txt", "Line1\n\tEnd")
+        configureWithEofMark("test.txt","Line1\n\tEnd")
         val editor = myFixture.editor
         val textLength = editor.document.textLength
 
@@ -121,7 +142,7 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
     }
 
     fun testEditorReleaseCleansUpInlayAndListener() {
-        myFixture.configureByText("test.txt", "Hello")
+        configureWithEofMark("test.txt","Hello")
         val editor = myFixture.editor
 
         // 手動で listener を追加（postStartupActivity 由来とは別のインスタンス）
@@ -139,5 +160,55 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         // inlay が dispose されていることを確認
         val inlaysAfter = getEofInlays()
         assertEquals("editorReleased should dispose the inlay", 1, inlaysAfter.size)
+    }
+
+    fun testUntypedEditorGetsNoEofInlay() {
+        val factory = EditorFactory.getInstance()
+        val document = factory.createDocument("Hello")
+        // 引数なしの createEditor は EditorTextField.createEditor() と同じ呼び出しで、
+        // EditorKind.UNTYPED になる。コミットメッセージ欄はこの経路で生成される。
+        val editor = factory.createEditor(document, project)
+        try {
+            assertEquals(EditorKind.UNTYPED, editor.editorKind)
+
+            EofMarkEditorListener(project).editorCreated(EditorFactoryEvent(factory, editor))
+
+            assertEquals(
+                "コミットメッセージ欄相当のエディタには [EOF] を表示しない",
+                0, eofInlaysOf(editor).size
+            )
+        } finally {
+            factory.releaseEditor(editor)
+        }
+    }
+
+    fun testMainEditorKindGetsEofInlay() {
+        val factory = EditorFactory.getInstance()
+        val document = factory.createDocument("Hello")
+        val editor = factory.createEditor(document, project, EditorKind.MAIN_EDITOR)
+        try {
+            // 本番の postStartupActivity が登録したリスナーが editorCreated を受けて付与する
+            val inlays = eofInlaysOf(editor)
+            assertEquals("メインエディタには [EOF] を表示する", 1, inlays.size)
+            assertEquals(document.textLength, inlays[0].offset)
+        } finally {
+            factory.releaseEditor(editor)
+        }
+    }
+
+    fun testIsEofMarkTargetAcceptsOnlyMainEditor() {
+        val factory = EditorFactory.getInstance()
+        for (kind in EditorKind.values()) {
+            val editor = factory.createEditor(factory.createDocument("Hello"), project, kind)
+            try {
+                assertEquals(
+                    "EditorKind.$kind",
+                    kind == EditorKind.MAIN_EDITOR,
+                    EofMarkEditorListener.isEofMarkTarget(editor)
+                )
+            } finally {
+                factory.releaseEditor(editor)
+            }
+        }
     }
 }
