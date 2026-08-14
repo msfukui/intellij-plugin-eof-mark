@@ -72,10 +72,16 @@ jobs:
 
       # リリース成果物を作るため、キャッシュ汚染が配布物に混入する経路を断つ。
       # PR のビルドが書き込んだキャッシュを信頼しない。
+      #
+      # cache-disabled: true の場合 gradle-actions-caching はロードされないため
+      # cache-provider の指定は本来不要だが、既定が 'enhanced'（プロプライエタリ）で
+      # あるため、将来キャッシュを有効化した際に黙って Terms of Use を受諾する状態に
+      # なるのを防ぐために明示しておく。
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-disabled: true
+          cache-provider: basic
 
       # 変換結果は GITHUB_ENV へ書き、以降の全ステップで同じ値が見えるようにする。
       # ステップ単位の env で渡すと、PLUGIN_CHANGE_NOTES を持たないステップで Gradle が
