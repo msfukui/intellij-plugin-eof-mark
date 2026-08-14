@@ -22,10 +22,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # git push は行わないため資格情報を .git/config に残さない。
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Get latest release tag
         id: latest_tag
@@ -42,9 +44,10 @@ jobs:
         id: collect_prs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_DATE: ${{ steps.latest_tag.outputs.tag_date }}
         run: |
-          if [ -n "${{ steps.latest_tag.outputs.tag_date }}" ]; then
-            SINCE="${{ steps.latest_tag.outputs.tag_date }}"
+          if [ -n "$TAG_DATE" ]; then
+            SINCE="$TAG_DATE"
             PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt | \
               jq --arg since "$SINCE" '[.[] | select((.mergedAt | fromdateiso8601) > ($since | fromdateiso8601))]')
           else
@@ -58,8 +61,10 @@ jobs:
 
       - name: Determine version bump level
         id: bump_level
+        env:
+          # ラベル名は利用者が付けた文字列なので、run へ直接展開せず env 経由で渡す。
+          PRS: ${{ steps.collect_prs.outputs.prs }}
         run: |
-          PRS='${{ steps.collect_prs.outputs.prs }}'
           HAS_MAJOR=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:major")')
           HAS_MINOR=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:minor")')
           HAS_PATCH=$(echo "$PRS" | jq '[.[].labels[].name] | any(. == "release:patch")')
@@ -82,32 +87,35 @@ jobs:
       - name: Calculate next version
         id: next_version
         if: steps.bump_level.outputs.level != ''
+        env:
+          LATEST_TAG: ${{ steps.latest_tag.outputs.tag }}
+          LEVEL: ${{ steps.bump_level.outputs.level }}
         run: |
           # 直近のタグを基準にする。draft のタグ名がバージョンの正であり、
           # gradle.properties は publish 時に追随させる。
-          TAG="${{ steps.latest_tag.outputs.tag }}"
-          if [ -n "$TAG" ]; then
-            CURRENT="${TAG#v}"
+          if [ -n "$LATEST_TAG" ]; then
+            CURRENT="${LATEST_TAG#v}"
           else
             CURRENT=$(grep '^pluginVersion' gradle.properties | sed 's/.*= *//')
           fi
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
 
-          case "${{ steps.bump_level.outputs.level }}" in
+          case "$LEVEL" in
             major) NEXT="$((MAJOR + 1)).0.0" ;;
             minor) NEXT="${MAJOR}.$((MINOR + 1)).0" ;;
             *)     NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
           esac
 
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
-          echo "Next version: $NEXT (bump: ${{ steps.bump_level.outputs.level }}, from: $CURRENT)"
+          echo "Next version: $NEXT (bump: $LEVEL, from: $CURRENT)"
 
       - name: Recreate draft release
         if: steps.bump_level.outputs.level != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.next_version.outputs.version }}
         run: |
-          TAG="v${{ steps.next_version.outputs.version }}"
+          TAG="v${VERSION}"
 
           # 既存の draft をすべて削除してから作り直す。前回リリース以降の PR と
           # ラベルを常に正しく反映させるため、状態を持たない方針とする。

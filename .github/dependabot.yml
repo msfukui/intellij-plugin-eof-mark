@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  # ワークフローのアクションはコミットハッシュに固定しているため、
+  # 更新の追従は Dependabot に任せる。ハッシュ固定でも semver を解釈して
+  # PR を出し、末尾のバージョンコメントも書き換えてくれる。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # 公開直後のバージョンを即座に取り込まない。改ざんされた版が公開された場合、
+    # 発覚・撤回までの猶予を確保するため。
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "release:patch"
+    commit-message:
+      prefix: "chore"
+
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # 公開直後のバージョンを即座に取り込まない。改ざんされた版が公開された場合、
+    # 発覚・撤回までの猶予を確保するため。
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "release:patch"
+    commit-message:
+      prefix: "chore"
