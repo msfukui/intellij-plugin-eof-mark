@@ -36,7 +36,9 @@ jobs:
           {
             echo "tag=$TAG"
             if [ -n "$TAG" ]; then
-              echo "tag_date=$(git log -1 --format=%cI "$TAG")"
+              # epoch 秒（%ct）で渡す。%cI はコミットのタイムゾーンをそのまま出力するため
+              # +09:00 形式になることがあり、jq の fromdateiso8601 は Z 形式しか解釈できない。
+              echo "tag_timestamp=$(git log -1 --format=%ct "$TAG")"
             fi
           } >> "$GITHUB_OUTPUT"
 
@@ -44,12 +46,12 @@ jobs:
         id: collect_prs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_DATE: ${{ steps.latest_tag.outputs.tag_date }}
+          TAG_TIMESTAMP: ${{ steps.latest_tag.outputs.tag_timestamp }}
         run: |
-          if [ -n "$TAG_DATE" ]; then
-            SINCE="$TAG_DATE"
+          if [ -n "$TAG_TIMESTAMP" ]; then
+            # mergedAt は GitHub API が常に Z 形式で返すためこちらは fromdateiso8601 で扱える。
             PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt | \
-              jq --arg since "$SINCE" '[.[] | select((.mergedAt | fromdateiso8601) > ($since | fromdateiso8601))]')
+              jq --argjson since "$TAG_TIMESTAMP" '[.[] | select((.mergedAt | fromdateiso8601) > $since)]')
           else
             PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
           fi
