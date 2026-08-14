@@ -1,16 +1,19 @@
 name: Workflow Audit
 
-# ワークフロー自体のセキュリティ検査。仕組みが無いとワークフローを追加するたびに
-# 同じ指摘が積み上がるため、変更時に必ず走らせる。
+# GitHub Actions 関連設定のセキュリティ検査。仕組みが無いとワークフローを追加する
+# たびに同じ指摘が積み上がるため、変更時に必ず走らせる。
+#
+# 検査対象はワークフローだけでなく dependabot.yml も含む（zizmor は .github/ 配下を
+# まとめて監査する）ため、paths は .github/** とする。
 on:
   push:
     branches: [ main ]
     paths:
-      - '.github/workflows/**'
+      - '.github/**'
   pull_request:
     branches: [ main ]
     paths:
-      - '.github/workflows/**'
+      - '.github/**'
 
 permissions: {}
 

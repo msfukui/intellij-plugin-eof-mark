@@ -8,6 +8,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # 公開直後のバージョンを即座に取り込まない。改ざんされた版が公開された場合、
+    # 発覚・撤回までの猶予を確保するため。
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "release:patch"
@@ -18,6 +22,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # 公開直後のバージョンを即座に取り込まない。改ざんされた版が公開された場合、
+    # 発覚・撤回までの猶予を確保するため。
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "release:patch"
