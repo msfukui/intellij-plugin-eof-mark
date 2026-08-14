@@ -43,6 +43,12 @@ intellijPlatform {
         changeNotes.set(providers.environmentVariable("PLUGIN_CHANGE_NOTES").orElse(""))
     }
 
+    pluginVerification {
+        ides {
+            recommended()
+        }
+    }
+
     publishing {
         token.set(providers.environmentVariable("JETBRAINS_MARKETPLACE_TOKEN"))
     }
