@@ -193,6 +193,39 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         }
     }
 
+    fun testNoCaretGuardWhenInlayCannotBeAdded() {
+        val factory = EditorFactory.getInstance()
+        val editor = factory.createEditor(factory.createDocument("Hello"), project, EditorKind.MAIN_EDITOR)
+        // エディタを破棄してからマーカーの追加を試みる。addEofInlay は isDisposed で
+        // 早期 return するため、マーカーは付かない。
+        factory.releaseEditor(editor)
+        assertTrue("前提: エディタが破棄されていること", editor.isDisposed)
+
+        val listener = EofMarkEditorListener(project)
+        listener.setupEditor(editor)
+
+        assertFalse(
+            "マーカーを追加できなかった場合はカーソル制御も登録しない",
+            listener.hasCaretGuard(editor)
+        )
+    }
+
+    fun testCaretGuardRegisteredWhenInlayAdded() {
+        val factory = EditorFactory.getInstance()
+        val editor = factory.createEditor(factory.createDocument("Hello"), project, EditorKind.MAIN_EDITOR)
+        try {
+            val listener = EofMarkEditorListener(project)
+            listener.setupEditor(editor)
+
+            assertTrue(
+                "マーカーを追加できた場合はカーソル制御も登録する",
+                listener.hasCaretGuard(editor)
+            )
+        } finally {
+            factory.releaseEditor(editor)
+        }
+    }
+
     fun testUntypedEditorGetsNoEofInlay() {
         val factory = EditorFactory.getInstance()
         val document = factory.createDocument("Hello")
