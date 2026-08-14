@@ -38,14 +38,16 @@ IntelliJ Platform 向けプラグインです。エディタで開いたファ�
 
 ## リリース
 
-GitHub Actions の手動トリガーでセマンティックバージョニングに基づくリリースを行います。
+draft release を publish することでリリースします。バージョン番号は draft release のタグ名が正となります。
 
 ### 手順
 
 1. PR に `release:major`、`release:minor`、`release:patch` のいずれかのラベルを付与してマージ
-2. リリースしたいタイミングで GitHub Actions の "Run workflow" または `gh workflow run "Release"`（または `gh workflow run release.yml`）を実行
-3. 前回リリース以降のマージ済み PR のラベルから最も影響の大きいバンプレベルが自動決定される
-4. `gradle.properties` 更新 → ビルド → タグ作成 → GitHub Release 作成（zip 添付）
+2. マージのたびに Draft Release ワークフローが動き、次バージョンの **draft release が作り直される**。タグはこの時点では作られない
+3. リリースしたいタイミングで [Releases](https://github.com/msfukui/intellij-plugin-eof-mark/releases) から draft を **publish** する
+4. Release ワークフローが動き、`gradle.properties` 更新 → ビルド → 互換性検証 → zip 添付 → JetBrains Marketplace へ公開
+
+リリースするバージョンを変えたい場合は、publish する前に draft のタグ名とタイトルを編集してください。
 
 ### バージョンバンプの優先度
 
@@ -55,7 +57,17 @@ GitHub Actions の手動トリガーでセマンティックバージョニン�
 | `release:minor` | X.Y.Z → X.(Y+1).0 |
 | `release:patch` | X.Y.Z → X.Y.(Z+1) |
 
-複数 PR がある場合、最も影響の大きいラベルが採用されます。
+複数 PR がある場合、最も影響の大きいラベルが採用されます。draft は毎回作り直されるため、前回リリース以降にマージされた全 PR とラベルが常に反映されます。
+
+### 公開だけをやり直す
+
+Marketplace への公開のみが失敗した場合（トークン失効、Marketplace 側の障害など）、リリース全体をやり直す必要はありません。既存のタグを指定して Release ワークフローを再実行してください。
+
+```bash
+gh workflow run release.yml -f tag=v0.1.5
+```
+
+`gradle.properties` のコミットと zip の添付は冪等なので、公開のみが再試行されます。
 
 ## インストール
 
