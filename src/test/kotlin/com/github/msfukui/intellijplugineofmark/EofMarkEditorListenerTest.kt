@@ -254,6 +254,43 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
         }
     }
 
+    /**
+     * dispose が CaretModel から実際に CaretListener を解除しているかを挙動で検証する。
+     *
+     * hasCaretGuard() は内部マップを見るだけなので、removeCaretListener を呼ばずに
+     * マップを clear するだけでも通ってしまう。しかしアンロードのリークは
+     * 「CaretModel にリスナーが残っていること」自体が原因なので、そこを直接確かめる。
+     */
+    fun testDisposeUnregistersCaretListenerFromEditor() {
+        myFixture.configureByText("test.txt", "Hello")
+        val editor = myFixture.editor
+        val textLength = editor.document.textLength
+
+        val listener = EofMarkEditorListener(project)
+        listener.setupEditor(editor)
+
+        // 前提: ガードが効いており、末尾より先へ進めない
+        editor.caretModel.moveToOffset(textLength)
+        val clampedColumn = editor.caretModel.visualPosition.column
+        myFixture.performEditorAction("EditorRight")
+        assertEquals(
+            "前提: dispose 前はカーソルがマーカーの先へ進まない",
+            clampedColumn, editor.caretModel.visualPosition.column
+        )
+
+        Disposer.dispose(listener)
+
+        // listener とは無関係にマーカーを付け直す。ガードが残っていればここでも clamp される。
+        editor.inlayModel.addInlineElement(textLength, true, EofMarkRenderer(editor))
+        editor.caretModel.moveToOffset(textLength)
+        myFixture.performEditorAction("EditorRight")
+
+        assertTrue(
+            "dispose 後は CaretModel からリスナーが外れ、カーソルがマーカーの先へ進む",
+            editor.caretModel.visualPosition.column > clampedColumn
+        )
+    }
+
     fun testUntypedEditorGetsNoEofInlay() {
         val factory = EditorFactory.getInstance()
         val document = factory.createDocument("Hello")
