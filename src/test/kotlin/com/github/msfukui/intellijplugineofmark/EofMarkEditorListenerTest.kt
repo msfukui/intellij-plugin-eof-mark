@@ -6,6 +6,7 @@ import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.event.EditorFactoryEvent
+import com.intellij.openapi.util.Disposer
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class EofMarkEditorListenerTest : BasePlatformTestCase() {
@@ -223,6 +224,33 @@ class EofMarkEditorListenerTest : BasePlatformTestCase() {
             )
         } finally {
             factory.releaseEditor(editor)
+        }
+    }
+
+    fun testDisposeCleansUpAllEditors() {
+        val factory = EditorFactory.getInstance()
+        val e1 = factory.createEditor(factory.createDocument("Hello"), project, EditorKind.MAIN_EDITOR)
+        val e2 = factory.createEditor(factory.createDocument("World"), project, EditorKind.MAIN_EDITOR)
+        try {
+            val listener = EofMarkEditorListener(project)
+            listener.setupEditor(e1)
+            listener.setupEditor(e2)
+            val before1 = eofInlaysOf(e1).size
+            val before2 = eofInlaysOf(e2).size
+            assertTrue("前提: 両方のエディタにマーカーが付いていること", before1 > 0 && before2 > 0)
+            assertTrue("前提: 両方にカーソル制御が登録されていること",
+                listener.hasCaretGuard(e1) && listener.hasCaretGuard(e2))
+
+            // プラグインのアンロード時に相当する後片付け
+            Disposer.dispose(listener)
+
+            assertEquals("dispose で e1 のマーカーが回収される", before1 - 1, eofInlaysOf(e1).size)
+            assertEquals("dispose で e2 のマーカーが回収される", before2 - 1, eofInlaysOf(e2).size)
+            assertFalse("dispose で e1 のカーソル制御が解除される", listener.hasCaretGuard(e1))
+            assertFalse("dispose で e2 のカーソル制御が解除される", listener.hasCaretGuard(e2))
+        } finally {
+            factory.releaseEditor(e1)
+            factory.releaseEditor(e2)
         }
     }
 

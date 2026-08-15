@@ -1,6 +1,9 @@
 package com.github.msfukui.intellijplugineofmark
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.EditorKind
@@ -12,9 +15,10 @@ import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
+import com.intellij.openapi.util.Disposer
 import org.jetbrains.annotations.TestOnly
 
-class EofMarkEditorListener(private val project: Project) : EditorFactoryListener {
+class EofMarkEditorListener(private val project: Project) : EditorFactoryListener, Disposable {
 
     private val editorInlays = mutableMapOf<Editor, Inlay<*>>()
     private val editorCaretListeners = mutableMapOf<Editor, CaretListener>()
@@ -63,6 +67,23 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
     @TestOnly
     internal fun hasCaretGuard(editor: Editor): Boolean = editorCaretListeners.containsKey(editor)
 
+    /**
+     * 追加したマーカーとカーソル制御をすべて解除する。
+     *
+     * プラグインのアンロード時に呼ばれる。これを行わないと、各エディタに残った
+     * EofMarkRenderer や CaretListener がプラグインの ClassLoader を掴み続け、
+     * アンロードに失敗して IDE の再起動が必要になる。
+     */
+    override fun dispose() {
+        editorInlays.values.forEach { if (it.isValid) it.dispose() }
+        editorInlays.clear()
+
+        editorCaretListeners.forEach { (editor, listener) ->
+            if (!editor.isDisposed) editor.caretModel.removeCaretListener(listener)
+        }
+        editorCaretListeners.clear()
+    }
+
     override fun editorReleased(event: EditorFactoryEvent) {
         val editor = event.editor
         if (editor.project != project) return
@@ -110,18 +131,42 @@ class EofMarkEditorListener(private val project: Project) : EditorFactoryListene
     }
 }
 
-class EofMarkProjectActivity : ProjectActivity {
-    override suspend fun execute(project: Project) {
+/**
+ * リスナーの寿命をプラグインのアンロードに合わせるためのプロジェクトサービス。
+ *
+ * 親 disposable に project を指定すると、プラグインをアンロードしてもプロジェクトが
+ * 開いている限りリスナーが Disposer のツリーに残り、プラグインの ClassLoader を掴み
+ * 続けてしまう（#80）。プラグインが提供するサービスはアンロード時にプラットフォームが
+ * dispose するため、ここを親にすることで確実に解放される。
+ */
+@Service(Service.Level.PROJECT)
+class EofMarkService(private val project: Project) : Disposable {
+
+    fun start() {
         ApplicationManager.getApplication().invokeAndWait {
             val listener = EofMarkEditorListener(project)
+            // サービスの dispose でリスナーの後片付け（マーカーとカーソル制御の解除）が走る
+            Disposer.register(this, listener)
+
             // 既に開かれているエディタにもマーカーとカーソル制御を追加
             for (editor in EditorFactory.getInstance().allEditors) {
                 if (editor.project == project && EofMarkEditorListener.isEofMarkTarget(editor)) {
                     listener.setupEditor(editor)
                 }
             }
-            // 今後作成されるエディタ用にリスナーを登録
-            EditorFactory.getInstance().addEditorFactoryListener(listener, project)
+            // 今後作成されるエディタ用にリスナーを登録する。親をサービスにすることで
+            // アンロード時に登録が解除される。
+            EditorFactory.getInstance().addEditorFactoryListener(listener, this)
         }
+    }
+
+    override fun dispose() {
+        // 子として登録した EofMarkEditorListener は Disposer が dispose する
+    }
+}
+
+class EofMarkProjectActivity : ProjectActivity {
+    override suspend fun execute(project: Project) {
+        project.service<EofMarkService>().start()
     }
 }
