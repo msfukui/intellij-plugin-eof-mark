@@ -33,28 +33,43 @@ jobs:
         id: latest_tag
         run: |
           TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
-          {
-            echo "tag=$TAG"
-            if [ -n "$TAG" ]; then
-              # epoch 秒（%ct）で渡す。%cI はコミットのタイムゾーンをそのまま出力するため
-              # +09:00 形式になることがあり、jq の fromdateiso8601 は Z 形式しか解釈できない。
-              echo "tag_timestamp=$(git log -1 --format=%ct "$TAG")"
-            fi
-          } >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      # タグ以降のコミットに紐づく PR を API で解決する。
+      #
+      # 以前は mergedAt とタグのコミット時刻を比較していたが、タグが指すマージコミットの
+      # committer 時刻より PR の mergedAt が 1 秒後になるため、そのリリースに含まれた
+      # 最後の PR を再収集し、中身が空の draft が作られていた（#81）。
+      #
+      # コミットの到達可能性で判定すれば時刻のずれに影響されない。マージ方法
+      # （merge / squash / rebase）にも依存しない。バージョンコミットは PR に
+      # 紐づかないため自然に除外される。
       - name: Collect merged PRs since last release
         id: collect_prs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_TIMESTAMP: ${{ steps.latest_tag.outputs.tag_timestamp }}
+          TAG: ${{ steps.latest_tag.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
-          if [ -n "$TAG_TIMESTAMP" ]; then
-            # mergedAt は GitHub API が常に Z 形式で返すためこちらは fromdateiso8601 で扱える。
-            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt | \
-              jq --argjson since "$TAG_TIMESTAMP" '[.[] | select((.mergedAt | fromdateiso8601) > $since)]')
+          if [ -n "$TAG" ]; then
+            RANGE="${TAG}..HEAD"
           else
-            PRS=$(gh pr list --state merged --base main --limit 200 --json number,labels,mergedAt)
+            RANGE="HEAD"
           fi
+
+          NUMBERS=$(git log --format=%H "$RANGE" | while read -r sha; do
+            gh api "repos/${REPO}/commits/${sha}/pulls" --jq '.[].number' 2>/dev/null || true
+          done | sort -un)
+
+          if [ -z "$NUMBERS" ]; then
+            PRS="[]"
+          else
+            PRS=$(for n in $NUMBERS; do
+              gh api "repos/${REPO}/pulls/${n}" --jq '{number: .number, labels: [.labels[] | {name: .name}]}'
+            done | jq -s '.')
+          fi
+
+          echo "Collected PRs: $(echo "$PRS" | jq -c 'map(.number)')"
           {
             echo "prs<<EOF"
             echo "$PRS"
